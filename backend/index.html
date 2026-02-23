@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>👤 Cliente</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #2d1b4e; color: white; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .card { background: #3d2060; border-radius: 12px; padding: 24px; width: 420px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+    h2 { text-align: center; margin-bottom: 20px; color: #a855f7; }
+    .badge { background: #a855f7; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; text-align: center; margin-bottom: 16px; }
+    #chat { background: #1e0a3c; border-radius: 8px; height: 280px; overflow-y: auto; padding: 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .burbuja { padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 14px; line-height: 1.4; }
+    .burbuja.recibido { background: #4a1a7a; align-self: flex-start; }
+    .burbuja.enviado { background: #a855f7; align-self: flex-end; }
+    .burbuja .hora { font-size: 10px; opacity: 0.6; margin-top: 4px; }
+    .burbuja .de { font-size: 11px; font-weight: bold; opacity: 0.8; margin-bottom: 2px; }
+    .fila { display: flex; gap: 8px; }
+    input { flex: 1; padding: 10px; border-radius: 8px; border: none; background: #1e0a3c; color: white; font-size: 14px; }
+    input::placeholder { color: #aaa; }
+    button { padding: 10px 16px; border-radius: 8px; border: none; background: #a855f7; color: white; cursor: pointer; font-size: 14px; }
+    button:hover { background: #9333ea; }
+    #estado { text-align: center; font-size: 12px; color: #aaa; margin-bottom: 12px; }
+    .setup { margin-bottom: 16px; }
+    .setup label { font-size: 13px; color: #aaa; display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>👤 Panel del Cliente</h2>
+
+    <div class="setup">
+      <label>Tu nombre:</label>
+      <div class="fila">
+        <input type="text" id="miNombre" placeholder="ej: María" value="María">
+        <button onclick="conectarse()">Conectar</button>
+      </div>
+    </div>
+
+    <div id="estado">⚪ Sin conectar</div>
+    <div id="badge-id" class="badge" style="display:none"></div>
+
+    <div id="chat"></div>
+
+    <div class="setup" style="margin-bottom:12px">
+      <label>ID del técnico al que escribes:</label>
+      <input type="text" id="tecnicoDestino" placeholder="ej: tecnico-juan" value="tecnico-juan">
+    </div>
+
+    <div class="fila">
+      <input type="text" id="mensajeInput" placeholder="Escribe tu mensaje..." onkeydown="if(event.key==='Enter') enviar()">
+      <button onclick="enviar()">Enviar</button>
+    </div>
+  </div>
+
+  <script>
+    let socket;
+    let miNombre;
+
+    function conectarse() {
+      miNombre = document.getElementById('miNombre').value.trim();
+      if (!miNombre) return alert('Pon tu nombre');
+
+      socket = io('http://localhost:4000');
+
+      socket.on('connect', () => {
+        // El cliente se une a una sala con su propio socket.id para recibir respuestas
+        socket.emit('join_tecnico', socket.id);
+
+        document.getElementById('estado').textContent = '🟢 Conectado';
+        document.getElementById('estado').style.color = '#a855f7';
+        document.getElementById('badge-id').textContent = `Tu ID: ${socket.id}`;
+        document.getElementById('badge-id').style.display = 'block';
+        agregarMensaje('Sistema', `Conectado como "${miNombre}". Escribe al técnico.`, 'recibido');
+      });
+
+      socket.on('recibir_mensaje', (data) => {
+        agregarMensaje(data.de, data.mensaje, 'recibido', data.hora);
+      });
+
+      socket.on('disconnect', () => {
+        document.getElementById('estado').textContent = '🔴 Desconectado';
+      });
+    }
+
+    function enviar() {
+      const mensaje = document.getElementById('mensajeInput').value.trim();
+      const para = document.getElementById('tecnicoDestino').value.trim();
+      if (!mensaje || !para) return alert('Falta el mensaje o el ID del técnico');
+
+      socket.emit('enviar_mensaje', {
+        de: socket.id,   // el técnico usará este ID para responder
+        para: para,
+        mensaje: `[${miNombre}]: ${mensaje}`
+      });
+
+      agregarMensaje('Tú', mensaje, 'enviado');
+      document.getElementById('mensajeInput').value = '';
+    }
+
+    function agregarMensaje(de, texto, tipo, hora = new Date().toLocaleTimeString()) {
+      const chat = document.getElementById('chat');
+      chat.innerHTML += `
+        <div class="burbuja ${tipo}">
+          <div class="de">${de}</div>
+          ${texto}
+          <div class="hora">${hora}</div>
+        </div>`;
+      chat.scrollTop = chat.scrollHeight;
+    }
+  </script>
+</body>
+</html>
